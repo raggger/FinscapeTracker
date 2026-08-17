@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Finscape Integration Tracker</title>
+<meta name="robots" content="noindex, nofollow" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: #FFFFFF; color: #1A2027; }
+  input, select, textarea { font-family: inherit; }
+  textarea:focus, input:focus { outline: none; }
+  .ws-item:hover .item-actions { opacity: 1; }
+  .status-select { appearance: none; -webkit-appearance: none; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #D8DAD5; border-radius: 4px; }
+  .card { background: #fff; border: 1px solid #E7E9E6; box-shadow: 0 1px 2px rgba(16,24,20,0.04), 0 8px 24px rgba(16,24,20,0.05); }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .expand-panel { animation: slideDown 0.2s ease-out; }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  .print-only { display: none; }
+  @media print {
+    .no-print { display: none !important; }
+    .print-only { display: flex !important; }
+    .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@0.383.0/dist/umd/lucide.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback } = React;
+
+const STATUS = {
+  "Completed": { color: "#0E9B7A", bg: "#E7F7F1" },
+  "In - progress": { color: "#C08A1E", bg: "#FBF3E1" },
+  "Yet to start": { color: "#C25450", bg: "#FBEBEA" },
+};
+const STATUS_KEYS = Object.keys(STATUS);
+const TEAL = "#0F8B8D";
+const TEAL_DEEP = "#0B6E70";
+const EMERALD = "#1FD9A0";
+const STORAGE_KEY = "finscape-tracker-data";
+
+const DEFAULT_DATA = {
+  workstreams: [
+    { id: "wsA", name: "Client Queries Phase 1", status: "Completed",
+      items: [
+        { id: "i1", text: "User Admin", done: true, note: "" },
+        { id: "i2", text: "Data Transfer", done: true, note: "" },
+        { id: "i3", text: "Troubleshoot Admin Problem", done: true, note: "" },
+      ] },
+    { id: "wsB", name: "Client Queries Phase 2", status: "In - progress",
+      items: [
+        { id: "i4", text: "Data Comprehension / Data WatchAlongs", done: false, note: "" },
+        { id: "i5", text: "How do I enqueries", done: false, note: "" },
+        { id: "i6", text: "2nd-line Client Queries", done: false, note: "" },
+      ] },
+    { id: "wsC", name: "Onboarding", status: "In - progress",
+      items: [
+        { id: "i7", text: "Opportunity Sales - Lost. Report to Access removal completed", done: true, note: "" },
+        { id: "i8", text: "Proceed with existing Onboarding Flow", done: false, note: "" },
+        { id: "i9", text: "Simplified Onboarding Record type - pushed back", done: false, note: "" },
+        { id: "i10", text: "Project Tracking - Project Code - initiated", done: false, note: "" },
+      ] },
+    { id: "wsD", name: "Mailbox Transition", status: "In - progress",
+      items: [
+        { id: "i11", text: "Draft coms - ready", done: false, note: "" },
+        { id: "i12", text: "Tentative dates - ready", done: false, note: "" },
+        { id: "i13", text: "Bella - no objection", done: false, note: "" },
+        { id: "i14", text: "Guy - yet to review", done: false, note: "" },
+      ] },
+    { id: "wsE", name: "Sales Alignment", status: "In - progress",
+      items: [ { id: "i15", text: "David - delayed", done: false, note: "" } ] },
+    { id: "wsF", name: "Fin Testing", status: "Yet to start",
+      items: [
+        { id: "i16", text: "Access to Fin", done: false, note: "" },
+        { id: "i17", text: "Creation of documentation", done: false, note: "" },
+        { id: "i18", text: "Moving documents to Fin's location", done: false, note: "" },
+      ] },
+    { id: "wsG", name: "Isaak Tasks", status: "In - progress", items: [] },
+  ],
+  risks: [],
+  meta: { lastUpdated: null },
+};
+
+function uid() { return Math.random().toString(36).slice(2, 10); }
+
+function WireMesh({ style }) {
+  const strands = Array.from({ length: 26 });
+  return (
+    <svg viewBox="0 0 900 320" style={style} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="meshGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+          <stop offset="0%" stopColor={EMERALD} />
+          <stop offset="100%" stopColor={TEAL_DEEP} />
+        </linearGradient>
+      </defs>
+      {strands.map((_, i) => {
+        const t = i / (strands.length - 1);
+        const yOff = t * 40 - 20;
+        const amp = 60 + t * 30;
+        return (
+          <path
+            key={i}
+            d={`M ${620 + t * 40},${-20 + yOff} C ${760 + t * 20},${60 + amp*0.4} ${560 - t*10},${140 + amp} ${700 + t*30},${340 + yOff*0.6}`}
+            fill="none"
+            stroke="url(#meshGrad)"
+            strokeWidth="1"
+            opacity={0.35 + t * 0.5}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+// Minimal inline icon set (avoids relying on lucide's React bindings inside Babel-in-browser)
+const Icon = ({ path, size = 14, color = "currentColor", strokeWidth = 2 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    {path}
+  </svg>
+);
+const IconPlus = (p) => <Icon {...p} path={<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>} />;
+const IconX = (p) => <Icon {...p} path={<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>} />;
+const IconChevronDown = (p) => <Icon {...p} path={<polyline points="6 9 12 15 18 9"/>} />;
+const IconDownload = (p) => <Icon {...p} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>} />;
+const IconAlert = (p) => <Icon {...p} path={<><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>} />;
+const IconCircle = (p) => <Icon {...p} path={<circle cx="12" cy="12" r="10"/>} />;
+const IconCheckCircle = (p) => <Icon {...p} path={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} />;
+const IconClock = (p) => <Icon {...p} path={<><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>} />;
+const IconNote = (p) => <Icon {...p} path={<><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8"/><path d="M17 3l4 4-9 9H8v-4z"/></>} />;
+
+const STATUS_ICON = {
+  "Completed": IconCheckCircle,
+  "In - progress": IconClock,
+  "Yet to start": IconCircle,
+};
+
+function Tracker() {
+  const [data, setData] = useState(DEFAULT_DATA);
+  const [loaded, setLoaded] = useState(false);
+  const [newRisk, setNewRisk] = useState("");
+  const [newItemText, setNewItemText] = useState({});
+  const [newWsName, setNewWsName] = useState("");
+  const [addingWs, setAddingWs] = useState(false);
+  const [saveState, setSaveState] = useState("idle");
+  const [expanded, setExpanded] = useState({});
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) setData(JSON.parse(raw));
+    } catch (e) { /* first run or corrupted, use defaults */ }
+    setLoaded(true);
+  }, []);
+
+  const persist = useCallback((next) => {
+    setSaveState("saving");
+    try {
+      const withMeta = { ...next, meta: { lastUpdated: new Date().toISOString() } };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(withMeta));
+      setData(withMeta);
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1400);
+    } catch (e) { setSaveState("error"); }
+  }, []);
+
+  if (!loaded) {
+    return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#6B7280" }}>Loading tracker…</div>;
+  }
+
+  const totalItems = data.workstreams.reduce((s, w) => s + w.items.length, 0);
+  const doneItems = data.workstreams.reduce((s, w) => s + w.items.filter(i => i.done).length, 0);
+  const pct = totalItems ? Math.round((doneItems / totalItems) * 100) : 0;
+  const statusCounts = STATUS_KEYS.reduce((acc, k) => { acc[k] = data.workstreams.filter(w => w.status === k).length; return acc; }, {});
+  const openRisks = data.risks.filter(r => !r.resolved);
+
+  function updateWs(wsId, patch) { persist({ ...data, workstreams: data.workstreams.map(w => w.id === wsId ? { ...w, ...patch } : w) }); }
+  function addItem(wsId) {
+    const text = (newItemText[wsId] || "").trim();
+    if (!text) return;
+    persist({ ...data, workstreams: data.workstreams.map(w => w.id === wsId ? { ...w, items: [...w.items, { id: uid(), text, done: false, note: "" }] } : w) });
+    setNewItemText({ ...newItemText, [wsId]: "" });
+  }
+  function toggleItem(wsId, itemId) {
+    persist({ ...data, workstreams: data.workstreams.map(w => w.id === wsId ? { ...w, items: w.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i) } : w) });
+  }
+  function removeItem(wsId, itemId) {
+    persist({ ...data, workstreams: data.workstreams.map(w => w.id === wsId ? { ...w, items: w.items.filter(i => i.id !== itemId) } : w) });
+  }
+  function editItemField(wsId, itemId, field, value) {
+    setData({ ...data, workstreams: data.workstreams.map(w => w.id === wsId ? { ...w, items: w.items.map(i => i.id === itemId ? { ...i, [field]: value } : i) } : w) });
+  }
+  function commitEdit() { persist(data); }
+  function addWorkstream() {
+    const name = newWsName.trim();
+    if (!name) return;
+    persist({ ...data, workstreams: [...data.workstreams, { id: uid(), name, status: "Yet to start", items: [] }] });
+    setNewWsName(""); setAddingWs(false);
+  }
+  function removeWorkstream(wsId) { persist({ ...data, workstreams: data.workstreams.filter(w => w.id !== wsId) }); }
+  function addRisk() {
+    const text = newRisk.trim();
+    if (!text) return;
+    persist({ ...data, risks: [...data.risks, { id: uid(), text, resolved: false }] });
+    setNewRisk("");
+  }
+  function toggleRisk(riskId) { persist({ ...data, risks: data.risks.map(r => r.id === riskId ? { ...r, resolved: !r.resolved } : r) }); }
+  function removeRisk(riskId) { persist({ ...data, risks: data.risks.filter(r => r.id !== riskId) }); }
+  function toggleExpand(itemId) { setExpanded(prev => ({ ...prev, [itemId]: !prev[itemId] })); }
+  function handleExportPdf() { window.print(); }
+
+  const line = "#E7E9E6";
+  const textMain = "#1A2027";
+  const textMuted = "#6B7280";
+
+  return (
+    <div>
+      <div className="no-print" style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${line}`, padding: "32px 40px 30px", background: "#FFFFFF" }}>
+        <WireMesh style={{ position: "absolute", top: 0, right: 0, width: "48%", height: "100%", opacity: 0.9 }} />
+        <div style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: TEAL, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", marginBottom: 8 }}>
+              Post-Merger Integration
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", fontFamily: "'Space Grotesk', sans-serif", color: textMain }}>
+              Finscape Integration Tracker
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 11.5, color: textMuted, fontFamily: "'JetBrains Mono', monospace" }}>
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : data.meta.lastUpdated ? `Updated ${new Date(data.meta.lastUpdated).toLocaleString()}` : ""}
+            </span>
+            <button onClick={handleExportPdf} className="btn-primary" style={{ display: "flex", alignItems: "center", gap: 8, background: `linear-gradient(135deg, ${EMERALD}, ${TEAL_DEEP})`, color: "#fff", border: "none", borderRadius: 9, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: `0 4px 16px rgba(15,139,141,0.3)` }}>
+              <IconDownload size={14} color="#fff" /> Export PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ margin: "22px 40px 0", borderRadius: 14, padding: "20px 26px", display: "flex", gap: 32, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ position: "relative", width: 58, height: 58 }}>
+            <svg width="58" height="58" viewBox="0 0 58 58">
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={EMERALD} />
+                  <stop offset="100%" stopColor={TEAL_DEEP} />
+                </linearGradient>
+              </defs>
+              <circle cx="29" cy="29" r="24" fill="none" stroke="#EEF1EF" strokeWidth="6" />
+              <circle cx="29" cy="29" r="24" fill="none" stroke="url(#ringGrad)" strokeWidth="6"
+                strokeDasharray={`${2 * Math.PI * 24}`} strokeDashoffset={`${2 * Math.PI * 24 * (1 - pct / 100)}`}
+                strokeLinecap="round" transform="rotate(-90 29 29)" />
+            </svg>
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: textMain }}>
+              {pct}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: 21, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: textMain }}>{doneItems}<span style={{ color: textMuted }}>/{totalItems}</span></div>
+            <div style={{ fontSize: 11.5, color: textMuted }}>action items closed</div>
+          </div>
+        </div>
+        <div style={{ width: 1, height: 40, background: line }} />
+        {STATUS_KEYS.map(k => (
+          <div key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: STATUS[k].color, display: "inline-block" }} />
+            <span style={{ fontSize: 13, color: "#374151" }}>{statusCounts[k] || 0} <span style={{ color: textMuted }}>{k}</span></span>
+          </div>
+        ))}
+        <div style={{ width: 1, height: 40, background: line }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <IconAlert size={15} color={openRisks.length ? "#C25450" : textMuted} />
+          <span style={{ fontSize: 13, color: openRisks.length ? "#C25450" : textMuted, fontWeight: openRisks.length ? 600 : 400 }}>
+            {openRisks.length} open risk{openRisks.length === 1 ? "" : "s"}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding: "22px 40px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 18 }}>
+        {data.workstreams.map(ws => {
+          const wsDone = ws.items.filter(i => i.done).length;
+          const StatusIcon = STATUS_ICON[ws.status] || IconCircle;
+          const sc = STATUS[ws.status] || STATUS["Yet to start"];
+          return (
+            <div key={ws.id} className="card" style={{ borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "15px 18px", borderBottom: `1px solid ${line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: textMain }}>{ws.name}</div>
+                <button onClick={() => removeWorkstream(ws.id)} className="no-print" style={{ background: "none", border: "none", cursor: "pointer", color: "#B7BBB4", padding: 2 }}>
+                  <IconX size={14} />
+                </button>
+              </div>
+              <div style={{ padding: "11px 18px", borderBottom: `1px solid ${line}`, background: sc.bg }}>
+                <div className="no-print" style={{ position: "relative" }}>
+                  <select className="status-select" value={ws.status} onChange={(e) => updateWs(ws.id, { status: e.target.value })}
+                    style={{ width: "100%", border: "none", background: "transparent", fontSize: 12.5, fontWeight: 600, color: sc.color, cursor: "pointer", padding: "2px 20px 2px 0" }}>
+                    {STATUS_KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+                  </select>
+                  <IconChevronDown size={13} color={sc.color} style={{ position: "absolute", right: 0, top: 4, pointerEvents: "none" }} />
+                </div>
+                <div className="print-only" style={{ fontSize: 12.5, fontWeight: 600, color: sc.color, alignItems: "center", gap: 6 }}>
+                  <StatusIcon size={13} color={sc.color} /> {ws.status} <span style={{ color: textMuted, fontWeight: 400 }}>· {wsDone}/{ws.items.length}</span>
+                </div>
+              </div>
+              <div style={{ padding: "10px 12px", flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                {ws.items.length === 0 && <div style={{ fontSize: 12.5, color: "#B7BBB4", padding: "8px 4px", fontStyle: "italic" }}>No items yet</div>}
+                {ws.items.map(item => {
+                  const isOpen = !!expanded[item.id];
+                  return (
+                    <div key={item.id} style={{ borderRadius: 8, background: isOpen ? "#F1F9F7" : "transparent" }}>
+                      <div className="ws-item" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "7px 6px" }}>
+                        <input type="checkbox" checked={item.done} onChange={() => toggleItem(ws.id, item.id)} className="no-print"
+                          style={{ marginTop: 3, accentColor: TEAL, cursor: "pointer", flexShrink: 0, width: 15, height: 15 }} />
+                        <span className="print-only" style={{ marginTop: 4 }}>
+                          {item.done ? <IconCheckCircle size={13} color="#0E9B7A" /> : <IconCircle size={13} color="#999" />}
+                        </span>
+                        <div onClick={() => toggleExpand(item.id)} style={{ flex: 1, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                          <input value={item.text} onClick={(e) => e.stopPropagation()} onChange={(e) => editItemField(ws.id, item.id, "text", e.target.value)} onBlur={commitEdit} className="no-print"
+                            style={{ flex: 1, border: "none", background: "transparent", fontSize: 13.5, lineHeight: 1.45, color: item.done ? "#9CA3AF" : textMain, textDecoration: item.done ? "line-through" : "none", padding: "2px 0" }} />
+                          <span className="print-only" style={{ fontSize: 13.5, color: item.done ? "#999" : "#111", textDecoration: item.done ? "line-through" : "none" }}>{item.text}</span>
+                          {item.note && !isOpen && <IconNote size={11} color={TEAL} className="no-print" />}
+                          <IconChevronDown size={13} color="#B7BBB4" className="no-print" style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                        </div>
+                        <button onClick={() => removeItem(ws.id, item.id)} className="item-actions no-print" style={{ opacity: 0, transition: "opacity 0.1s", background: "none", border: "none", cursor: "pointer", color: "#B7BBB4", marginTop: 2 }}>
+                          <IconX size={12} />
+                        </button>
+                      </div>
+                      {isOpen && (
+                        <div className="expand-panel no-print" style={{ padding: "0 10px 12px 34px" }}>
+                          <textarea value={item.note} onChange={(e) => editItemField(ws.id, item.id, "note", e.target.value)} onBlur={commitEdit}
+                            placeholder="Notes, context, discussion points…" rows={3}
+                            style={{ width: "100%", background: "#fff", border: `1px solid ${line}`, borderRadius: 8, padding: "9px 11px", fontSize: 12.5, color: textMain, resize: "vertical", lineHeight: 1.5 }} />
+                        </div>
+                      )}
+                      {item.note && <div className="print-only" style={{ padding: "0 10px 10px 34px", fontSize: 11.5, color: "#555" }}>{item.note}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="no-print" style={{ padding: "8px 12px 12px", display: "flex", gap: 6 }}>
+                <input placeholder="Add item…" value={newItemText[ws.id] || ""} onChange={(e) => setNewItemText({ ...newItemText, [ws.id]: e.target.value })} onKeyDown={(e) => e.key === "Enter" && addItem(ws.id)}
+                  style={{ flex: 1, border: `1px solid ${line}`, background: "#FAFBFA", borderRadius: 8, padding: "8px 11px", fontSize: 12.5, color: textMain }} />
+                <button onClick={() => addItem(ws.id)} style={{ border: "none", background: TEAL, color: "#fff", borderRadius: 8, width: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                  <IconPlus size={14} color="#fff" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="no-print" style={{ border: `1.5px dashed ${line}`, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 160, padding: 16, background: "#FAFBFA" }}>
+          {addingWs ? (
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+              <input autoFocus placeholder="New box name, e.g. Legal Review…" value={newWsName} onChange={(e) => setNewWsName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWorkstream()}
+                style={{ border: `1px solid ${line}`, background: "#fff", color: textMain, borderRadius: 8, padding: "9px 11px", fontSize: 13 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={addWorkstream} style={{ flex: 1, border: "none", background: `linear-gradient(135deg, ${EMERALD}, ${TEAL_DEEP})`, color: "#fff", borderRadius: 8, padding: "9px 0", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Create box</button>
+                <button onClick={() => { setAddingWs(false); setNewWsName(""); }} style={{ flex: 1, border: `1px solid ${line}`, background: "#fff", color: textMuted, borderRadius: 8, padding: "9px 0", fontSize: 12.5, cursor: "pointer" }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAddingWs(true)} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: TEAL, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              <IconPlus size={18} /> Add a new box
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div style={{ padding: "0 40px 34px" }}>
+        <div className="card" style={{ borderRadius: 14, overflow: "hidden" }}>
+          <div style={{ padding: "15px 18px", borderBottom: `1px solid ${line}`, display: "flex", alignItems: "center", gap: 8 }}>
+            <IconAlert size={15} color="#C25450" />
+            <div style={{ fontSize: 15, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", color: textMain }}>Risks & Blockers</div>
+          </div>
+          <div style={{ padding: "10px 18px" }}>
+            {data.risks.length === 0 && <div style={{ fontSize: 12.5, color: "#B7BBB4", fontStyle: "italic", padding: "6px 0" }}>No risks logged</div>}
+            {data.risks.map(r => (
+              <div key={r.id} className="ws-item" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px", borderBottom: `1px solid ${line}` }}>
+                <input type="checkbox" checked={r.resolved} onChange={() => toggleRisk(r.id)} className="no-print" style={{ accentColor: TEAL, cursor: "pointer" }} />
+                <span className="print-only">{r.resolved ? <IconCheckCircle size={13} color="#0E9B7A" /> : <IconAlert size={13} color="#C25450" />}</span>
+                <span style={{ flex: 1, fontSize: 13.5, color: r.resolved ? "#9CA3AF" : textMain, textDecoration: r.resolved ? "line-through" : "none" }}>{r.text}</span>
+                <button onClick={() => removeRisk(r.id)} className="item-actions no-print" style={{ opacity: 0, transition: "opacity 0.1s", background: "none", border: "none", cursor: "pointer", color: "#B7BBB4" }}>
+                  <IconX size={13} />
+                </button>
+              </div>
+            ))}
+            <div className="no-print" style={{ display: "flex", gap: 6, marginTop: 10 }}>
+              <input placeholder="Add a risk or blocker…" value={newRisk} onChange={(e) => setNewRisk(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addRisk()}
+                style={{ flex: 1, border: `1px solid ${line}`, background: "#FAFBFA", color: textMain, borderRadius: 8, padding: "9px 11px", fontSize: 12.5 }} />
+              <button onClick={addRisk} style={{ border: "none", background: "linear-gradient(135deg, #E07A76, #C25450)", color: "#fff", borderRadius: 8, width: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <IconPlus size={14} color="#fff" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="no-print" style={{ padding: "0 40px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10.5, color: "#9CA3AF" }}>
+        <span>© FE fundinfo, Company confidential &nbsp;|&nbsp; STRICTLY NOT FOR DISTRIBUTION</span>
+        <span style={{ fontWeight: 700, color: TEAL, fontFamily: "'Space Grotesk', sans-serif", fontSize: 13 }}>FE fundinfo</span>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Tracker />);
+</script>
+</body>
+</html>
