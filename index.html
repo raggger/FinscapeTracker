@@ -428,6 +428,35 @@ const IconMinimize = p => /*#__PURE__*/React.createElement(Icon, {
     y2: "14"
   }))
 });
+const IconGrip = p => /*#__PURE__*/React.createElement(Icon, {
+  ...p,
+  path: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("circle", {
+    cx: "9",
+    cy: "6",
+    r: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "15",
+    cy: "6",
+    r: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "9",
+    cy: "12",
+    r: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "15",
+    cy: "12",
+    r: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "9",
+    cy: "18",
+    r: "1"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "15",
+    cy: "18",
+    r: "1"
+  })),
+  strokeWidth: 2.5
+});
 const STATUS_ICON = {
   "Completed": IconCheckCircle,
   "In - progress": IconClock,
@@ -447,6 +476,8 @@ function Tracker() {
   const [notesSaveState, setNotesSaveState] = useState("idle");
   const [darkMode, setDarkMode] = useState(false);
   const [expandedNoteId, setExpandedNoteId] = useState(null);
+  const [draggedNoteId, setDraggedNoteId] = useState(null);
+  const [dragOverNoteId, setDragOverNoteId] = useState(null);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -687,6 +718,16 @@ function Tracker() {
   }
   function commitNotes() {
     persistNotes(notesList);
+  }
+  function reorderNotes(draggedId, targetId) {
+    if (draggedId === targetId) return;
+    const list = [...notesList];
+    const fromIdx = list.findIndex(n => n.id === draggedId);
+    const toIdx = list.findIndex(n => n.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+    persistNotes(list);
   }
   function removeNote(noteId) {
     const note = notesList.find(n => n.id === noteId);
@@ -1591,27 +1632,60 @@ function Tracker() {
     }
   }, "No notes yet — click \"Add note\" to start one."), notesList.map(note => /*#__PURE__*/React.createElement("div", {
     key: note.id,
+    draggable: true,
+    onDragStart: e => {
+      setDraggedNoteId(note.id);
+      e.dataTransfer.effectAllowed = "move";
+    },
+    onDragOver: e => {
+      e.preventDefault();
+      if (draggedNoteId && draggedNoteId !== note.id) setDragOverNoteId(note.id);
+    },
+    onDragLeave: () => setDragOverNoteId(prev => prev === note.id ? null : prev),
+    onDrop: e => {
+      e.preventDefault();
+      if (draggedNoteId) reorderNotes(draggedNoteId, note.id);
+      setDraggedNoteId(null);
+      setDragOverNoteId(null);
+    },
+    onDragEnd: () => {
+      setDraggedNoteId(null);
+      setDragOverNoteId(null);
+    },
     style: {
-      border: `1px solid ${line}`,
+      border: `1px solid ${dragOverNoteId === note.id ? TEAL : line}`,
       borderRadius: 10,
       overflow: "auto",
       resize: "both",
       minWidth: 260,
       minHeight: 140,
       display: "flex",
-      flexDirection: "column"
+      flexDirection: "column",
+      opacity: draggedNoteId === note.id ? 0.4 : 1,
+      boxShadow: dragOverNoteId === note.id ? `0 0 0 2px ${TEAL}33` : "none",
+      transition: "border-color 0.1s, box-shadow 0.1s"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
-      gap: 8,
+      gap: 6,
       padding: "8px 10px",
       background: bgSubtle,
       borderBottom: `1px solid ${line}`,
       flexShrink: 0
     }
-  }, /*#__PURE__*/React.createElement("input", {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      cursor: "grab",
+      display: "flex",
+      color: "#B7BBB4",
+      flexShrink: 0
+    },
+    title: "Drag to reorder"
+  }, /*#__PURE__*/React.createElement(IconGrip, {
+    size: 13
+  })), /*#__PURE__*/React.createElement("input", {
     value: note.title,
     onChange: e => updateNoteField(note.id, "title", e.target.value),
     onBlur: commitNotes,
