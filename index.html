@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Finscape Integration Tracker</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMUZEOUEwIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzBCNkU3MCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3QgeD0iMiIgeT0iMiIgd2lkdGg9IjI4IiBoZWlnaHQ9IjI4IiByeD0iNyIgZmlsbD0idXJsKCNnKSIvPgogIDxyZWN0IHg9IjgiIHk9IjkiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIHJ4PSIxLjUiIGZpbGw9IiNmZmYiLz4KICA8cGF0aCBkPSJNOS41IDEybDEuMyAxLjNMMTMgMTAuOCIgc3Ryb2tlPSIjMEI2RTcwIiBzdHJva2Utd2lkdGg9IjEuNCIgZmlsbD0ibm9uZSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+CiAgPHJlY3QgeD0iMTciIHk9IjEwLjUiIHdpZHRoPSI4IiBoZWlnaHQ9IjIiIHJ4PSIxIiBmaWxsPSIjZmZmIi8+CiAgPHJlY3QgeD0iOCIgeT0iMTkiIHdpZHRoPSI2IiBoZWlnaHQ9IjYiIHJ4PSIxLjUiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuNTUiLz4KICA8cmVjdCB4PSIxNyIgeT0iMjAuNSIgd2lkdGg9IjgiIGhlaWdodD0iMiIgcng9IjEiIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuNTUiLz4KPC9zdmc+Cg==">
 <meta name="robots" content="noindex, nofollow" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -1654,17 +1655,22 @@ function Tracker() {
       setDragOverNoteId(null);
     },
     style: {
+      width: 340,
+      minWidth: 260,
+      flex: "0 0 340px",
+      opacity: draggedNoteId === note.id ? 0.4 : 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
       border: `1px solid ${dragOverNoteId === note.id ? TEAL : line}`,
       borderRadius: 10,
       overflow: "auto",
       resize: "both",
       minWidth: 260,
       minHeight: 140,
-      width: 340,
-      flex: "0 0 auto",
+      width: "100%",
       display: "flex",
       flexDirection: "column",
-      opacity: draggedNoteId === note.id ? 0.4 : 1,
       boxShadow: dragOverNoteId === note.id ? `0 0 0 2px ${TEAL}33` : "none",
       transition: "border-color 0.1s, box-shadow 0.1s"
     }
@@ -1750,7 +1756,7 @@ function Tracker() {
       lineHeight: 1.6,
       minHeight: 90
     }
-  })))))), /*#__PURE__*/React.createElement("div", {
+  }))))))), /*#__PURE__*/React.createElement("div", {
     className: "no-print",
     style: {
       padding: "0 40px 24px",
