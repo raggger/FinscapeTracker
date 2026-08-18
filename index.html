@@ -1620,8 +1620,9 @@ function Tracker() {
     style: {
       padding: "14px 18px",
       display: "flex",
-      flexDirection: "column",
-      gap: 14
+      flexWrap: "wrap",
+      gap: 14,
+      alignItems: "flex-start"
     }
   }, notesList.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1659,6 +1660,8 @@ function Tracker() {
       resize: "both",
       minWidth: 260,
       minHeight: 140,
+      width: 340,
+      flex: "0 0 auto",
       display: "flex",
       flexDirection: "column",
       opacity: draggedNoteId === note.id ? 0.4 : 1,
