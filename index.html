@@ -12,7 +12,9 @@
   body { font-family: 'Inter', -apple-system, sans-serif; background: #FFFFFF; color: #1A2027; }
   input, select, textarea { font-family: inherit; }
   textarea:focus, input:focus { outline: none; }
+  .item-actions { opacity: 0.35; transition: opacity 0.1s; }
   .ws-item:hover .item-actions { opacity: 1; }
+  .item-actions:hover { opacity: 1; }
   .status-select { appearance: none; -webkit-appearance: none; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: #D8DAD5; border-radius: 4px; }
@@ -83,6 +85,7 @@ const TEAL = "#0F8B8D";
 const TEAL_DEEP = "#0B6E70";
 const EMERALD = "#1FD9A0";
 const STORAGE_KEY = "finscape-tracker-data";
+const NOTES_STORAGE_KEY = "finscape-tracker-notes";
 const DEFAULT_DATA = {
   workstreams: [{
     id: "wsA",
@@ -385,12 +388,42 @@ function Tracker() {
   const [addingWs, setAddingWs] = useState(false);
   const [saveState, setSaveState] = useState("idle");
   const [expanded, setExpanded] = useState({});
+  const [confirmDialog, setConfirmDialog] = useState(null); // { message, onConfirm }
+  const [notesList, setNotesList] = useState([]);
+  const [notesSaveState, setNotesSaveState] = useState("idle");
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) setData(JSON.parse(raw));
     } catch (e) {/* first run or corrupted, use defaults */}
+    try {
+      const rawNotes = localStorage.getItem(NOTES_STORAGE_KEY);
+      if (rawNotes !== null) {
+        const parsed = JSON.parse(rawNotes);
+        // Migrate old single-string format if present
+        if (typeof parsed === "string") {
+          setNotesList(parsed.trim() ? [{
+            id: uid(),
+            title: "Note 1",
+            text: parsed
+          }] : []);
+        } else if (Array.isArray(parsed)) {
+          setNotesList(parsed);
+        }
+      }
+    } catch (e) {/* no notes yet */}
     setLoaded(true);
+  }, []);
+  const persistNotes = useCallback(list => {
+    setNotesSaveState("saving");
+    try {
+      localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(list));
+      setNotesList(list);
+      setNotesSaveState("saved");
+      setTimeout(() => setNotesSaveState("idle"), 1200);
+    } catch (e) {
+      setNotesSaveState("error");
+    }
   }, []);
   const persist = useCallback(next => {
     setSaveState("saving");
@@ -470,12 +503,21 @@ function Tracker() {
     });
   }
   function removeItem(wsId, itemId) {
-    persist({
-      ...data,
-      workstreams: data.workstreams.map(w => w.id === wsId ? {
-        ...w,
-        items: w.items.filter(i => i.id !== itemId)
-      } : w)
+    const ws = data.workstreams.find(w => w.id === wsId);
+    const item = ws && ws.items.find(i => i.id === itemId);
+    const label = item ? `"${item.text}"` : "this item";
+    setConfirmDialog({
+      message: `Delete ${label}? This can't be undone.`,
+      onConfirm: () => {
+        persist({
+          ...data,
+          workstreams: data.workstreams.map(w => w.id === wsId ? {
+            ...w,
+            items: w.items.filter(i => i.id !== itemId)
+          } : w)
+        });
+        setConfirmDialog(null);
+      }
     });
   }
   function editItemField(wsId, itemId, field, value) {
@@ -509,9 +551,17 @@ function Tracker() {
     setAddingWs(false);
   }
   function removeWorkstream(wsId) {
-    persist({
-      ...data,
-      workstreams: data.workstreams.filter(w => w.id !== wsId)
+    const ws = data.workstreams.find(w => w.id === wsId);
+    const itemCount = ws ? ws.items.length : 0;
+    setConfirmDialog({
+      message: `Delete the entire "${ws ? ws.name : "box"}" box${itemCount ? ` and its ${itemCount} item${itemCount === 1 ? "" : "s"}` : ""}? This can't be undone.`,
+      onConfirm: () => {
+        persist({
+          ...data,
+          workstreams: data.workstreams.filter(w => w.id !== wsId)
+        });
+        setConfirmDialog(null);
+      }
     });
   }
   function addRisk() {
@@ -537,9 +587,16 @@ function Tracker() {
     });
   }
   function removeRisk(riskId) {
-    persist({
-      ...data,
-      risks: data.risks.filter(r => r.id !== riskId)
+    const risk = data.risks.find(r => r.id === riskId);
+    setConfirmDialog({
+      message: `Delete this risk${risk ? `: "${risk.text}"` : ""}? This can't be undone.`,
+      onConfirm: () => {
+        persist({
+          ...data,
+          risks: data.risks.filter(r => r.id !== riskId)
+        });
+        setConfirmDialog(null);
+      }
     });
   }
   function toggleExpand(itemId) {
@@ -548,8 +605,69 @@ function Tracker() {
       [itemId]: !prev[itemId]
     }));
   }
+  function addNote() {
+    const next = [...notesList, {
+      id: uid(),
+      title: `Note ${notesList.length + 1}`,
+      text: ""
+    }];
+    persistNotes(next);
+  }
+  function updateNoteField(noteId, field, value) {
+    setNotesList(prev => prev.map(n => n.id === noteId ? {
+      ...n,
+      [field]: value
+    } : n));
+  }
+  function commitNotes() {
+    persistNotes(notesList);
+  }
+  function removeNote(noteId) {
+    const note = notesList.find(n => n.id === noteId);
+    setConfirmDialog({
+      message: `Delete the note "${note ? note.title : ""}"? This can't be undone.`,
+      onConfirm: () => {
+        persistNotes(notesList.filter(n => n.id !== noteId));
+        setConfirmDialog(null);
+      }
+    });
+  }
   function handleExportPdf() {
     window.print();
+  }
+  function handleExportNotes() {
+    const esc = s => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const sections = notesList.map(n => `
+    <section>
+      <h2>${esc(n.title || "Untitled note")}</h2>
+      <pre>${esc(n.text)}</pre>
+    </section>`).join("\n");
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Finscape Tracker Notes</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #1A2027; line-height: 1.6; }
+  h1 { font-size: 20px; color: #0B6E70; border-bottom: 2px solid #E7E9E6; padding-bottom: 10px; }
+  h2 { font-size: 15px; color: #0F8B8D; margin: 28px 0 6px; }
+  .meta { color: #6B7280; font-size: 12px; margin-bottom: 24px; }
+  pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; margin: 0; }
+  section { border-bottom: 1px solid #F0F0EE; padding-bottom: 14px; }
+</style></head>
+<body>
+  <h1>Finscape Integration Tracker — Notes</h1>
+  <div class="meta">Exported ${new Date().toLocaleString()}</div>
+  ${sections || "<p>No notes yet.</p>"}
+</body></html>`;
+    const blob = new Blob([html], {
+      type: "text/html"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `finscape-notes-${new Date().toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
   const line = "#E7E9E6";
   const textMain = "#1A2027";
@@ -973,17 +1091,18 @@ function Tracker() {
       })), /*#__PURE__*/React.createElement("button", {
         onClick: () => removeItem(ws.id, item.id),
         className: "item-actions no-print",
+        title: "Delete item",
         style: {
-          opacity: 0,
           transition: "opacity 0.1s",
           background: "none",
           border: "none",
           cursor: "pointer",
           color: "#B7BBB4",
-          marginTop: 2
+          marginTop: 1,
+          padding: 4
         }
       }, /*#__PURE__*/React.createElement(IconX, {
-        size: 12
+        size: 13
       }))), isOpen && /*#__PURE__*/React.createElement("div", {
         className: "expand-panel no-print",
         style: {
@@ -1262,6 +1381,161 @@ function Tracker() {
   })))))), /*#__PURE__*/React.createElement("div", {
     className: "no-print",
     style: {
+      padding: "0 40px 34px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      borderRadius: 14,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "15px 18px",
+      borderBottom: `1px solid ${line}`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(IconNote, {
+    size: 15,
+    color: TEAL
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      fontFamily: "'Space Grotesk', sans-serif",
+      color: textMain
+    }
+  }, "Notes"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: textMuted,
+      fontFamily: "'JetBrains Mono', monospace"
+    }
+  }, notesSaveState === "saving" ? "Saving…" : notesSaveState === "saved" ? "Saved ✓" : "")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: addNote,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      background: TEAL,
+      border: "none",
+      color: "#fff",
+      borderRadius: 8,
+      padding: "7px 13px",
+      fontSize: 12.5,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(IconPlus, {
+    size: 13,
+    color: "#fff"
+  }), " Add note"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleExportNotes,
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      background: "#fff",
+      border: `1px solid ${line}`,
+      color: TEAL,
+      borderRadius: 8,
+      padding: "7px 13px",
+      fontSize: 12.5,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(IconDownload, {
+    size: 13,
+    color: TEAL
+  }), " Export all as HTML"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "14px 18px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 14
+    }
+  }, notesList.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12.5,
+      color: "#B7BBB4",
+      fontStyle: "italic",
+      padding: "6px 0"
+    }
+  }, "No notes yet — click \"Add note\" to start one."), notesList.map(note => /*#__PURE__*/React.createElement("div", {
+    key: note.id,
+    style: {
+      border: `1px solid ${line}`,
+      borderRadius: 10,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "8px 10px",
+      background: "#FAFBFA",
+      borderBottom: `1px solid ${line}`
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: note.title,
+    onChange: e => updateNoteField(note.id, "title", e.target.value),
+    onBlur: commitNotes,
+    placeholder: "Note title…",
+    style: {
+      flex: 1,
+      border: "none",
+      background: "transparent",
+      fontSize: 13.5,
+      fontWeight: 600,
+      color: textMain,
+      padding: "2px 4px"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => removeNote(note.id),
+    style: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: "#B7BBB4",
+      padding: 4
+    },
+    title: "Delete note"
+  }, /*#__PURE__*/React.createElement(IconX, {
+    size: 13
+  }))), /*#__PURE__*/React.createElement("textarea", {
+    value: note.text,
+    onChange: e => updateNoteField(note.id, "text", e.target.value),
+    onBlur: commitNotes,
+    placeholder: "Write here…",
+    rows: 4,
+    style: {
+      width: "100%",
+      background: "#fff",
+      border: "none",
+      padding: "10px 12px",
+      fontSize: 13,
+      color: textMain,
+      resize: "vertical",
+      lineHeight: 1.6
+    }
+  })))))), /*#__PURE__*/React.createElement("div", {
+    className: "no-print",
+    style: {
       padding: "0 40px 24px",
       display: "flex",
       justifyContent: "space-between",
@@ -1276,7 +1550,75 @@ function Tracker() {
       fontFamily: "'Space Grotesk', sans-serif",
       fontSize: 13
     }
-  }, "FE fundinfo")));
+  }, "FE fundinfo")), confirmDialog && /*#__PURE__*/React.createElement("div", {
+    className: "no-print",
+    style: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(20,25,30,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000
+    },
+    onClick: () => setConfirmDialog(null)
+  }, /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    style: {
+      background: "#fff",
+      borderRadius: 14,
+      padding: "24px 26px",
+      maxWidth: 380,
+      width: "90%",
+      boxShadow: "0 20px 60px rgba(0,0,0,0.25)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 12,
+      marginBottom: 18
+    }
+  }, /*#__PURE__*/React.createElement(IconAlert, {
+    size: 20,
+    color: "#C25450"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14.5,
+      color: textMain,
+      lineHeight: 1.5
+    }
+  }, confirmDialog.message)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      justifyContent: "flex-end"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setConfirmDialog(null),
+    style: {
+      border: `1px solid ${line}`,
+      background: "#fff",
+      color: textMuted,
+      borderRadius: 8,
+      padding: "9px 16px",
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Cancel"), /*#__PURE__*/React.createElement("button", {
+    onClick: confirmDialog.onConfirm,
+    style: {
+      border: "none",
+      background: "linear-gradient(135deg, #E07A76, #C25450)",
+      color: "#fff",
+      borderRadius: 8,
+      padding: "9px 16px",
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer"
+    }
+  }, "Delete")))));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Tracker, null));
 
