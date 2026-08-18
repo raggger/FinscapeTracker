@@ -18,7 +18,8 @@
   .status-select { appearance: none; -webkit-appearance: none; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: #D8DAD5; border-radius: 4px; }
-  .card { background: #fff; border: 1px solid #E7E9E6; box-shadow: 0 1px 2px rgba(16,24,20,0.04), 0 8px 24px rgba(16,24,20,0.05); }
+  .card { background: var(--card-bg, #fff); border: 1px solid var(--card-border, #E7E9E6); box-shadow: 0 1px 2px rgba(16,24,20,0.04), 0 8px 24px rgba(16,24,20,0.05); transition: background 0.15s, border-color 0.15s; }
+  body { transition: background 0.15s; }
   .btn-primary:hover { filter: brightness(1.08); }
   .expand-panel { animation: slideDown 0.2s ease-out; }
   @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
@@ -86,6 +87,7 @@ const TEAL_DEEP = "#0B6E70";
 const EMERALD = "#1FD9A0";
 const STORAGE_KEY = "finscape-tracker-data";
 const NOTES_STORAGE_KEY = "finscape-tracker-notes";
+const DARKMODE_STORAGE_KEY = "finscape-tracker-darkmode";
 const DEFAULT_DATA = {
   workstreams: [{
     id: "wsA",
@@ -374,6 +376,58 @@ const IconNote = p => /*#__PURE__*/React.createElement(Icon, {
     d: "M17 3l4 4-9 9H8v-4z"
   }))
 });
+const IconSun = p => /*#__PURE__*/React.createElement(Icon, {
+  ...p,
+  path: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("circle", {
+    cx: "12",
+    cy: "12",
+    r: "4"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+  }))
+});
+const IconMoon = p => /*#__PURE__*/React.createElement(Icon, {
+  ...p,
+  path: /*#__PURE__*/React.createElement("path", {
+    d: "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+  })
+});
+const IconMaximize = p => /*#__PURE__*/React.createElement(Icon, {
+  ...p,
+  path: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("polyline", {
+    points: "15 3 21 3 21 9"
+  }), /*#__PURE__*/React.createElement("polyline", {
+    points: "9 21 3 21 3 15"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "21",
+    y1: "3",
+    x2: "14",
+    y2: "10"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "3",
+    y1: "21",
+    x2: "10",
+    y2: "14"
+  }))
+});
+const IconMinimize = p => /*#__PURE__*/React.createElement(Icon, {
+  ...p,
+  path: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("polyline", {
+    points: "4 14 10 14 10 20"
+  }), /*#__PURE__*/React.createElement("polyline", {
+    points: "20 10 14 10 14 4"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "14",
+    y1: "10",
+    x2: "21",
+    y2: "3"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "3",
+    y1: "21",
+    x2: "10",
+    y2: "14"
+  }))
+});
 const STATUS_ICON = {
   "Completed": IconCheckCircle,
   "In - progress": IconClock,
@@ -391,6 +445,8 @@ function Tracker() {
   const [confirmDialog, setConfirmDialog] = useState(null); // { message, onConfirm }
   const [notesList, setNotesList] = useState([]);
   const [notesSaveState, setNotesSaveState] = useState("idle");
+  const [darkMode, setDarkMode] = useState(false);
+  const [expandedNoteId, setExpandedNoteId] = useState(null);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -412,8 +468,18 @@ function Tracker() {
         }
       }
     } catch (e) {/* no notes yet */}
+    try {
+      const rawDark = localStorage.getItem(DARKMODE_STORAGE_KEY);
+      if (rawDark !== null) setDarkMode(rawDark === "true");
+    } catch (e) {/* default light */}
     setLoaded(true);
   }, []);
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(DARKMODE_STORAGE_KEY, String(darkMode));
+    } catch (e) {/* ignore */}
+  }, [darkMode, loaded]);
   const persistNotes = useCallback(list => {
     setNotesSaveState("saving");
     try {
@@ -632,6 +698,34 @@ function Tracker() {
       }
     });
   }
+  function exportSingleNoteHtml(note) {
+    const esc = s => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>${esc(note.title || "Note")}</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; color: #1A2027; line-height: 1.6; }
+  h1 { font-size: 19px; color: #0F8B8D; border-bottom: 2px solid #E7E9E6; padding-bottom: 10px; }
+  .meta { color: #6B7280; font-size: 12px; margin-bottom: 24px; }
+  pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; }
+</style></head>
+<body>
+  <h1>${esc(note.title || "Untitled note")}</h1>
+  <div class="meta">Exported ${new Date().toLocaleString()} · Finscape Integration Tracker</div>
+  <pre>${esc(note.text)}</pre>
+</body></html>`;
+    const blob = new Blob([html], {
+      type: "text/html"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const safeName = (note.title || "note").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "note";
+    a.download = `${safeName}-${new Date().toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
   function handleExportPdf() {
     window.print();
   }
@@ -669,17 +763,31 @@ function Tracker() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
-  const line = "#E7E9E6";
-  const textMain = "#1A2027";
-  const textMuted = "#6B7280";
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  const dark = darkMode;
+  const line = dark ? "#2A3441" : "#E7E9E6";
+  const textMain = dark ? "#E7ECF2" : "#1A2027";
+  const textMuted = dark ? "#9AA5B4" : "#6B7280";
+  const bgPage = dark ? "#0F1620" : "#FFFFFF";
+  const bgCard = dark ? "#182230" : "#FFFFFF";
+  const bgSubtle = dark ? "#111A24" : "#FAFBFA";
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      "--card-bg": bgCard,
+      "--card-border": line,
+      "--input-bg": bgSubtle,
+      background: bgPage,
+      minHeight: "100vh",
+      color: textMain,
+      transition: "background 0.15s, color 0.15s"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     className: "no-print",
     style: {
       position: "relative",
       overflow: "hidden",
       borderBottom: `1px solid ${line}`,
       padding: "32px 40px 30px",
-      background: "#FFFFFF"
+      background: bgPage
     }
   }, /*#__PURE__*/React.createElement(WireMesh, {
     style: {
@@ -688,7 +796,7 @@ function Tracker() {
       right: 0,
       width: "48%",
       height: "100%",
-      opacity: 0.9
+      opacity: dark ? 0.55 : 0.9
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -699,31 +807,36 @@ function Tracker() {
       flexWrap: "wrap",
       gap: 16
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      letterSpacing: "0.16em",
-      textTransform: "uppercase",
-      color: TEAL,
-      fontWeight: 700,
-      fontFamily: "'JetBrains Mono', monospace",
-      marginBottom: 8
-    }
-  }, "Post-Merger Integration"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 30,
-      fontWeight: 700,
-      letterSpacing: "-0.02em",
-      fontFamily: "'Space Grotesk', sans-serif",
-      color: textMain
-    }
-  }, "Finscape Integration Tracker")), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
       alignItems: "center"
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setDarkMode(!darkMode),
+    className: "btn-primary",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: dark ? "#1C2733" : "#fff",
+      border: `1px solid ${line}`,
+      color: textMain,
+      borderRadius: 9,
+      padding: "10px 14px",
+      fontSize: 13,
+      fontWeight: 600,
+      cursor: "pointer"
+    },
+    title: darkMode ? "Switch to light mode" : "Switch to dark mode"
+  }, darkMode ? /*#__PURE__*/React.createElement(IconSun, {
+    size: 14,
+    color: textMain
+  }) : /*#__PURE__*/React.createElement(IconMoon, {
+    size: 14,
+    color: textMain
+  })), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11.5,
       color: textMuted,
@@ -887,6 +1000,130 @@ function Tracker() {
     }
   }, openRisks.length, " open risk", openRisks.length === 1 ? "" : "s"))), /*#__PURE__*/React.createElement("div", {
     style: {
+      padding: "0 40px 34px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    style: {
+      borderRadius: 14,
+      overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "15px 18px",
+      borderBottom: `1px solid ${line}`,
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(IconAlert, {
+    size: 15,
+    color: "#C25450"
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      fontFamily: "'Space Grotesk', sans-serif",
+      color: textMain
+    }
+  }, "Risks & Blockers")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "10px 18px"
+    }
+  }, data.risks.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12.5,
+      color: "#B7BBB4",
+      fontStyle: "italic",
+      padding: "6px 0"
+    }
+  }, "No risks logged"), data.risks.map(r => /*#__PURE__*/React.createElement("div", {
+    key: r.id,
+    className: "ws-item",
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "8px 2px",
+      borderBottom: `1px solid ${line}`
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: r.resolved,
+    onChange: () => toggleRisk(r.id),
+    className: "no-print",
+    style: {
+      accentColor: TEAL,
+      cursor: "pointer"
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "print-only"
+  }, r.resolved ? /*#__PURE__*/React.createElement(IconCheckCircle, {
+    size: 13,
+    color: "#0E9B7A"
+  }) : /*#__PURE__*/React.createElement(IconAlert, {
+    size: 13,
+    color: "#C25450"
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      fontSize: 13.5,
+      color: r.resolved ? "#9CA3AF" : textMain,
+      textDecoration: r.resolved ? "line-through" : "none"
+    }
+  }, r.text), /*#__PURE__*/React.createElement("button", {
+    onClick: () => removeRisk(r.id),
+    className: "item-actions no-print",
+    title: "Delete risk",
+    style: {
+      transition: "opacity 0.1s",
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: "#B7BBB4",
+      padding: 4
+    }
+  }, /*#__PURE__*/React.createElement(IconX, {
+    size: 13
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "no-print",
+    style: {
+      display: "flex",
+      gap: 6,
+      marginTop: 10
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    placeholder: "Add a risk or blocker…",
+    value: newRisk,
+    onChange: e => setNewRisk(e.target.value),
+    onKeyDown: e => e.key === "Enter" && addRisk(),
+    style: {
+      flex: 1,
+      border: `1px solid ${line}`,
+      background: bgSubtle,
+      color: textMain,
+      borderRadius: 8,
+      padding: "9px 11px",
+      fontSize: 12.5
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: addRisk,
+    style: {
+      border: "none",
+      background: "linear-gradient(135deg, #E07A76, #C25450)",
+      color: "#fff",
+      borderRadius: 8,
+      width: 34,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement(IconPlus, {
+    size: 14,
+    color: "#fff"
+  })))))), /*#__PURE__*/React.createElement("div", {
+    style: {
       padding: "22px 40px",
       display: "grid",
       gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
@@ -1010,7 +1247,7 @@ function Tracker() {
         key: item.id,
         style: {
           borderRadius: 8,
-          background: isOpen ? "#F1F9F7" : "transparent"
+          background: isOpen ? dark ? "rgba(15,139,141,0.15)" : "#F1F9F7" : "transparent"
         }
       }, /*#__PURE__*/React.createElement("div", {
         className: "ws-item",
@@ -1116,7 +1353,7 @@ function Tracker() {
         rows: 3,
         style: {
           width: "100%",
-          background: "#fff",
+          background: bgSubtle,
           border: `1px solid ${line}`,
           borderRadius: 8,
           padding: "9px 11px",
@@ -1151,7 +1388,7 @@ function Tracker() {
       style: {
         flex: 1,
         border: `1px solid ${line}`,
-        background: "#FAFBFA",
+        background: bgSubtle,
         borderRadius: 8,
         padding: "8px 11px",
         fontSize: 12.5,
@@ -1184,7 +1421,7 @@ function Tracker() {
       justifyContent: "center",
       minHeight: 160,
       padding: 16,
-      background: "#FAFBFA"
+      background: bgSubtle
     }
   }, addingWs ? /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1201,7 +1438,7 @@ function Tracker() {
     onKeyDown: e => e.key === "Enter" && addWorkstream(),
     style: {
       border: `1px solid ${line}`,
-      background: "#fff",
+      background: bgSubtle,
       color: textMain,
       borderRadius: 8,
       padding: "9px 11px",
@@ -1233,7 +1470,7 @@ function Tracker() {
     style: {
       flex: 1,
       border: `1px solid ${line}`,
-      background: "#fff",
+      background: bgCard,
       color: textMuted,
       borderRadius: 8,
       padding: "9px 0",
@@ -1256,130 +1493,6 @@ function Tracker() {
   }, /*#__PURE__*/React.createElement(IconPlus, {
     size: 18
   }), " Add a new box"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "0 40px 34px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      borderRadius: 14,
-      overflow: "hidden"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "15px 18px",
-      borderBottom: `1px solid ${line}`,
-      display: "flex",
-      alignItems: "center",
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement(IconAlert, {
-    size: 15,
-    color: "#C25450"
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 15,
-      fontWeight: 700,
-      fontFamily: "'Space Grotesk', sans-serif",
-      color: textMain
-    }
-  }, "Risks & Blockers")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "10px 18px"
-    }
-  }, data.risks.length === 0 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12.5,
-      color: "#B7BBB4",
-      fontStyle: "italic",
-      padding: "6px 0"
-    }
-  }, "No risks logged"), data.risks.map(r => /*#__PURE__*/React.createElement("div", {
-    key: r.id,
-    className: "ws-item",
-    style: {
-      display: "flex",
-      alignItems: "center",
-      gap: 10,
-      padding: "8px 2px",
-      borderBottom: `1px solid ${line}`
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    checked: r.resolved,
-    onChange: () => toggleRisk(r.id),
-    className: "no-print",
-    style: {
-      accentColor: TEAL,
-      cursor: "pointer"
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "print-only"
-  }, r.resolved ? /*#__PURE__*/React.createElement(IconCheckCircle, {
-    size: 13,
-    color: "#0E9B7A"
-  }) : /*#__PURE__*/React.createElement(IconAlert, {
-    size: 13,
-    color: "#C25450"
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      fontSize: 13.5,
-      color: r.resolved ? "#9CA3AF" : textMain,
-      textDecoration: r.resolved ? "line-through" : "none"
-    }
-  }, r.text), /*#__PURE__*/React.createElement("button", {
-    onClick: () => removeRisk(r.id),
-    className: "item-actions no-print",
-    title: "Delete risk",
-    style: {
-      transition: "opacity 0.1s",
-      background: "none",
-      border: "none",
-      cursor: "pointer",
-      color: "#B7BBB4",
-      padding: 4
-    }
-  }, /*#__PURE__*/React.createElement(IconX, {
-    size: 13
-  })))), /*#__PURE__*/React.createElement("div", {
-    className: "no-print",
-    style: {
-      display: "flex",
-      gap: 6,
-      marginTop: 10
-    }
-  }, /*#__PURE__*/React.createElement("input", {
-    placeholder: "Add a risk or blocker…",
-    value: newRisk,
-    onChange: e => setNewRisk(e.target.value),
-    onKeyDown: e => e.key === "Enter" && addRisk(),
-    style: {
-      flex: 1,
-      border: `1px solid ${line}`,
-      background: "#FAFBFA",
-      color: textMain,
-      borderRadius: 8,
-      padding: "9px 11px",
-      fontSize: 12.5
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: addRisk,
-    style: {
-      border: "none",
-      background: "linear-gradient(135deg, #E07A76, #C25450)",
-      color: "#fff",
-      borderRadius: 8,
-      width: 34,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      cursor: "pointer"
-    }
-  }, /*#__PURE__*/React.createElement(IconPlus, {
-    size: 14,
-    color: "#fff"
-  })))))), /*#__PURE__*/React.createElement("div", {
     className: "no-print",
     style: {
       padding: "0 40px 34px"
@@ -1450,7 +1563,7 @@ function Tracker() {
       display: "flex",
       alignItems: "center",
       gap: 6,
-      background: "#fff",
+      background: bgCard,
       border: `1px solid ${line}`,
       color: TEAL,
       borderRadius: 8,
@@ -1481,7 +1594,12 @@ function Tracker() {
     style: {
       border: `1px solid ${line}`,
       borderRadius: 10,
-      overflow: "hidden"
+      overflow: "auto",
+      resize: "both",
+      minWidth: 260,
+      minHeight: 140,
+      display: "flex",
+      flexDirection: "column"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1489,8 +1607,9 @@ function Tracker() {
       alignItems: "center",
       gap: 8,
       padding: "8px 10px",
-      background: "#FAFBFA",
-      borderBottom: `1px solid ${line}`
+      background: bgSubtle,
+      borderBottom: `1px solid ${line}`,
+      flexShrink: 0
     }
   }, /*#__PURE__*/React.createElement("input", {
     value: note.title,
@@ -1507,6 +1626,25 @@ function Tracker() {
       padding: "2px 4px"
     }
   }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => exportSingleNoteHtml(note),
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      background: "none",
+      border: `1px solid ${line}`,
+      cursor: "pointer",
+      color: TEAL,
+      padding: "4px 9px",
+      borderRadius: 6,
+      fontSize: 11.5,
+      fontWeight: 600
+    },
+    title: "Export this note as HTML"
+  }, /*#__PURE__*/React.createElement(IconDownload, {
+    size: 11,
+    color: TEAL
+  }), " Export"), /*#__PURE__*/React.createElement("button", {
     onClick: () => removeNote(note.id),
     style: {
       background: "none",
@@ -1523,16 +1661,17 @@ function Tracker() {
     onChange: e => updateNoteField(note.id, "text", e.target.value),
     onBlur: commitNotes,
     placeholder: "Write here…",
-    rows: 4,
     style: {
       width: "100%",
-      background: "#fff",
+      flex: 1,
+      background: bgCard,
       border: "none",
       padding: "10px 12px",
       fontSize: 13,
       color: textMain,
-      resize: "vertical",
-      lineHeight: 1.6
+      resize: "none",
+      lineHeight: 1.6,
+      minHeight: 90
     }
   })))))), /*#__PURE__*/React.createElement("div", {
     className: "no-print",
@@ -1566,7 +1705,7 @@ function Tracker() {
   }, /*#__PURE__*/React.createElement("div", {
     onClick: e => e.stopPropagation(),
     style: {
-      background: "#fff",
+      background: bgCard,
       borderRadius: 14,
       padding: "24px 26px",
       maxWidth: 380,
@@ -1599,7 +1738,7 @@ function Tracker() {
     onClick: () => setConfirmDialog(null),
     style: {
       border: `1px solid ${line}`,
-      background: "#fff",
+      background: bgCard,
       color: textMuted,
       borderRadius: 8,
       padding: "9px 16px",
