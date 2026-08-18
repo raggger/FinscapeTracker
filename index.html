@@ -1331,13 +1331,14 @@ function Tracker() {
   }, r.text), /*#__PURE__*/React.createElement("button", {
     onClick: () => removeRisk(r.id),
     className: "item-actions no-print",
+    title: "Delete risk",
     style: {
-      opacity: 0,
       transition: "opacity 0.1s",
       background: "none",
       border: "none",
       cursor: "pointer",
-      color: "#B7BBB4"
+      color: "#B7BBB4",
+      padding: 4
     }
   }, /*#__PURE__*/React.createElement(IconX, {
     size: 13
